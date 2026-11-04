@@ -162,10 +162,16 @@ class V380Camera:
         print(f"[V380] Connected & streaming video from {rtsp_url} ({self.dev_id})")
 
         try:
+            bad_reads = 0
             while not self._stop_flag and not self._restart_stream and cap.isOpened():
                 ok, frame = cap.read()
                 if not ok or frame is None:
-                    break
+                    bad_reads += 1
+                    if bad_reads > 8:
+                        break
+                    time.sleep(0.05)
+                    continue
+                bad_reads = 0
 
                 flip_mode = self.status_info.get("flip", 0)
                 if flip_mode == 1:
@@ -424,15 +430,16 @@ class V380Camera:
             self.audio_running = False
 
     def get_summary(self):
+        is_conn = self.connected or bool(self.last_frame_ts and (time.time() - self.last_frame_ts) < 15.0)
         return {
             "id": self.cam_id,
             "name": self.name,
             "protocol": "V380 Pro (RTSP + ONVIF Direct)",
             "dev_uid": f"{self.dev_id} (v380_81766371136)",
             "ip": self.ip,
-            "connected": self.connected,
-            "connecting": self.connecting,
-            "fps": self.fps if self.connected else 0.0,
+            "connected": is_conn,
+            "connecting": False if is_conn else self.connecting,
+            "fps": self.fps if is_conn else 0.0,
             "last_frame_age": round(time.time() - self.last_frame_ts, 1) if self.last_frame_ts else None,
             "last_error": self.last_error,
             "status": self.status_info,

@@ -198,14 +198,17 @@ class YsxLiteCamera:
                 pass
 
     async def _run_loop(self):
+        if os.environ.get("RENDER"):
+            await asyncio.sleep(6.0)
         while not self._stop_flag:
-            if self.last_frame_ts and (time.time() - self.last_frame_ts) < 8.0 and self.dev is None:
+            if self.last_frame_ts and (time.time() - self.last_frame_ts) < 15.0 and self.dev is None:
                 self.connected = True
                 self.connecting = False
                 await asyncio.sleep(2.0)
                 continue
             try:
-                self.connecting = True
+                if not (self.last_frame_ts and (time.time() - self.last_frame_ts) < 15.0):
+                    self.connecting = True
                 discovered_ip, wan_sock, wan_addr = await self._discover_ip()
                 if wan_sock is not None and wan_addr is not None:
                     print(f"[YsxLite] Connected via P2P WAN to {wan_addr[0]}:{wan_addr[1]} ({self.dev_uid})")
@@ -362,15 +365,16 @@ class YsxLiteCamera:
             return {"ok": False, "error": str(e)}
 
     def get_summary(self):
+        is_conn = self.connected or bool(self.last_frame_ts and (time.time() - self.last_frame_ts) < 15.0)
         return {
             "id": self.cam_id,
             "name": self.name,
             "protocol": "YsxLite / PPPP Direct LAN",
             "dev_uid": self.dev_uid,
             "ip": self.ip,
-            "connected": self.connected,
-            "connecting": self.connecting,
-            "fps": self.fps if self.connected else 0.0,
+            "connected": is_conn,
+            "connecting": False if is_conn else self.connecting,
+            "fps": self.fps if is_conn else 0.0,
             "last_frame_age": round(time.time() - self.last_frame_ts, 1) if self.last_frame_ts else None,
             "last_error": self.last_error,
             "status": self.status_info,

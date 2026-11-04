@@ -411,7 +411,8 @@ class MichiCamApp:
 
         last_sent_ts = 0.0
         while True:
-            if cam.connected and cam.last_frame:
+            is_conn = cam.connected or bool(cam.last_frame_ts and (time.time() - cam.last_frame_ts) < 15.0)
+            if is_conn and cam.last_frame:
                 if cam.last_frame_ts == last_sent_ts:
                     await asyncio.sleep(0.04)
                     continue
