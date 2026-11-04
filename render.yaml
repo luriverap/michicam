@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: michicam
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 8080
+

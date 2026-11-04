@@ -1,0 +1,130 @@
+import argparse
+import asyncio
+import logging
+
+from .discover import DEFAULT_DISCOVERY_ADDRESS, Discovery
+from .http_server import SESSIONS, start_web_server
+from .session import make_session
+
+logger = logging.getLogger(__name__)
+
+discovery = None
+
+tasks = {}
+
+new_device_fut = None
+
+
+def get_new_device_fut():
+    return new_device_fut
+
+
+def notify_new_device():
+    # The future is recreated on every main-loop iteration and is None before
+    # the loop starts, so guard against missing/already-resolved futures.
+    fut = get_new_device_fut()
+    if fut is not None and not fut.done():
+        fut.set_result(None)
+
+
+def on_device_found(device, login, password):
+    dev_id = device.dev_id.dev_id
+    if dev_id in SESSIONS:
+        # Discovery re-finds already-connected cameras every cycle; creating a
+        # new session here would leak the previous one's running tasks.
+        return
+    session = make_session(device, on_device_lost=on_device_lost, login=login, password=password)
+    SESSIONS[dev_id] = session
+    session.start()
+    tasks[dev_id] = session.running_tasks()
+    notify_new_device()
+
+
+def on_device_lost(device):
+    logger.warning('Device %s lost', device.dev_id)
+    SESSIONS.pop(device.dev_id.dev_id, None)
+    tasks.pop(device.dev_id.dev_id, None)
+    notify_new_device()
+
+
+async def amain(remote_addr, local_port, username, password):
+    global discovery
+    global new_device_fut
+    discovery = Discovery(remote_addr=remote_addr, local_port=local_port)
+
+    discovery_task = asyncio.create_task(discovery.discover(lambda d: on_device_found(d, username, password)))
+    webserver_task = asyncio.create_task(start_web_server())
+    try:
+        while True:
+            new_device_fut = asyncio.Future()
+            dev_tasks = set(t for task_list in tasks.values() for t in task_list)
+            done, pending = await asyncio.wait(
+                [
+                    discovery_task,
+                    webserver_task,
+                    new_device_fut,
+                    *dev_tasks,
+                ],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if new_device_fut in pending:
+                break
+        if done:
+            await asyncio.gather(*done)
+    finally:
+        for dev_id, session in list(SESSIONS.items()):
+            session.stop()
+        SESSIONS.clear()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog='aiopppp',
+        description='A test web server to serve video stream from PPPP-based cameras',
+    )
+    parser.add_argument(
+        '-a',
+        '--addr',
+        type=str,
+        default=DEFAULT_DISCOVERY_ADDRESS,
+        help=f'Remote discovery address, default is {DEFAULT_DISCOVERY_ADDRESS}',
+    )
+    parser.add_argument(
+        '-dp',
+        '--local-discovery-port',
+        type=int,
+        default=0,
+        help='Local discovery port for receiving incoming discovery packets, default is random',
+    )
+    parser.add_argument(
+        '--log-level',
+        type=str,
+        default='INFO',
+    )
+    parser.add_argument(
+        '-u',
+        '--username',
+        type=str,
+        default='',
+        help='Auth login',
+    )
+    parser.add_argument(
+        '-p',
+        '--password',
+        type=str,
+        default='',
+        help='Auth password',
+    )
+
+    args = parser.parse_args()
+    logging.basicConfig(level=logging.getLevelName(args.log_level.upper()))
+    asyncio.run(amain(
+        remote_addr=args.addr,
+        local_port=args.local_discovery_port,
+        username=args.username,
+        password=args.password,
+    ))
+
+
+if __name__ == '__main__':
+    main()

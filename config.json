@@ -1,0 +1,23 @@
+{
+  "ysxlite_ip": "192.168.80.164",
+  "ysxlite_uid": "PTZC-934480-LPXPD",
+  "v380_dev_id": "111085293",
+  "v380_ip": "192.168.80.114",
+  "v380_username": "admin",
+  "v380_password": "",
+  "ai_enabled": true,
+  "motion_enabled": false,
+  "auto_capture_cat": true,
+  "auto_capture_motion": true,
+  "cat_confidence": 0.32,
+  "motion_threshold": 2.2,
+  "capture_cooldown": 25,
+  "ntfy_enabled": true,
+  "ntfy_topic": "michicam-alertas-934480",
+  "telegram_enabled": false,
+  "telegram_bot_token": "",
+  "telegram_chat_id": "",
+  "gdrive_folder_name": "MichiCam_Cámaras",
+  "gdrive_local_mirror": "",
+  "public_tunnel_url": "https://publish-reading-divx-jerusalem.trycloudflare.com"
+}
