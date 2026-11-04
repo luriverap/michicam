@@ -137,26 +137,30 @@ class MichiCamApp:
 
     async def _cloud_relay_loop(self):
         import urllib.request
-        last_pushed_ts = 0.0
+        last_pushed = {"ysxlite": 0.0, "v380": 0.0}
         while True:
             try:
                 cloud_url = (self.config.get("cloud_server_url") or "").strip().rstrip("/")
-                if cloud_url and self.v380.connected and self.v380.last_frame and self.v380.last_frame_ts != last_pushed_ts:
-                    last_pushed_ts = self.v380.last_frame_ts
-                    jpg = self.v380.last_frame
-                    def _push():
-                        req = urllib.request.Request(
-                            f"{cloud_url}/api/camera/v380/push_frame",
-                            data=jpg,
-                            headers={"Content-Type": "image/jpeg"},
-                            method="POST",
-                        )
-                        with urllib.request.urlopen(req, timeout=3.0) as _:
-                            pass
-                    await asyncio.to_thread(_push)
-                    await asyncio.sleep(0.25)
-                else:
-                    await asyncio.sleep(1.0)
+                if not cloud_url:
+                    await asyncio.sleep(1.5)
+                    continue
+                pushed_any = False
+                for cid, cam_obj in (("ysxlite", self.ysxlite), ("v380", self.v380)):
+                    if cam_obj.connected and cam_obj.last_frame and cam_obj.last_frame_ts != last_pushed[cid]:
+                        last_pushed[cid] = cam_obj.last_frame_ts
+                        jpg = cam_obj.last_frame
+                        def _push(c=cid, data=jpg):
+                            req = urllib.request.Request(
+                                f"{cloud_url}/api/camera/{c}/push_frame",
+                                data=data,
+                                headers={"Content-Type": "image/jpeg"},
+                                method="POST",
+                            )
+                            with urllib.request.urlopen(req, timeout=3.0) as _:
+                                pass
+                        await asyncio.to_thread(_push)
+                        pushed_any = True
+                await asyncio.sleep(0.2 if pushed_any else 0.8)
             except Exception:
                 await asyncio.sleep(2.0)
 

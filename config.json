@@ -19,5 +19,6 @@
   "telegram_chat_id": "",
   "gdrive_folder_name": "MichiCam_Cámaras",
   "gdrive_local_mirror": "",
-  "public_tunnel_url": "https://publish-reading-divx-jerusalem.trycloudflare.com"
+  "public_tunnel_url": "https://michicam.onrender.com",
+  "cloud_server_url": "https://michicam.onrender.com"
 }

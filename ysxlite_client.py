@@ -179,8 +179,31 @@ class YsxLiteCamera:
                 break
         self.audio_running = False
 
+    def ingest_pushed_frame(self, jpeg_bytes: bytes):
+        now = time.time()
+        self.last_frame = jpeg_bytes
+        self.last_frame_ts = now
+        self.connected = True
+        self.connecting = False
+        self.last_error = None
+        self._frame_counter += 1
+        if now - self._fps_ts >= 2.0:
+            self.fps = round(self._frame_counter / (now - self._fps_ts), 1)
+            self._frame_counter = 0
+            self._fps_ts = now
+        if self.on_frame:
+            try:
+                self.on_frame(self.cam_id, self.name, self.last_frame)
+            except Exception:
+                pass
+
     async def _run_loop(self):
         while not self._stop_flag:
+            if self.last_frame_ts and (time.time() - self.last_frame_ts) < 8.0 and self.dev is None:
+                self.connected = True
+                self.connecting = False
+                await asyncio.sleep(2.0)
+                continue
             try:
                 self.connecting = True
                 discovered_ip, wan_sock, wan_addr = await self._discover_ip()
@@ -243,10 +266,12 @@ class YsxLiteCamera:
                         self._handle_video_frame(frame.data)
 
             except Exception as e:
-                self.last_error = str(e)
-                print(f"[YsxLite] Connection/stream cycle notice ({self.ip}): {e}")
+                if not (self.last_frame_ts and (time.time() - self.last_frame_ts) < 8.0):
+                    self.last_error = str(e)
+                    print(f"[YsxLite] Connection/stream cycle notice ({self.ip}): {e}")
             finally:
-                self.connected = False
+                if not (self.last_frame_ts and (time.time() - self.last_frame_ts) < 8.0):
+                    self.connected = False
                 self.connecting = False
                 self.audio_running = False
                 if self.dev:
